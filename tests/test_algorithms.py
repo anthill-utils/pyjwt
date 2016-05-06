@@ -1,4 +1,5 @@
 import base64
+import json
 
 from jwt.algorithms import Algorithm, HMACAlgorithm, NoneAlgorithm
 from jwt.exceptions import InvalidKeyError
@@ -36,6 +37,18 @@ class TestAlgorithms:
         with pytest.raises(NotImplementedError):
             algo.verify('message', 'key', 'signature')
 
+    def test_algorithm_should_throw_exception_if_to_jwk_not_impl(self):
+        algo = Algorithm()
+
+        with pytest.raises(NotImplementedError):
+            algo.from_jwk('value')
+
+    def test_algorithm_should_throw_exception_if_from_jwk_not_impl(self):
+        algo = Algorithm()
+
+        with pytest.raises(NotImplementedError):
+            algo.to_jwk('value')
+
     def test_none_algorithm_should_throw_exception_if_key_is_not_none(self):
         algo = NoneAlgorithm()
 
@@ -49,7 +62,7 @@ class TestAlgorithms:
             algo.prepare_key(object())
 
         exception = context.value
-        assert str(exception) == 'Expecting a string- or bytes-formatted key.'
+        assert str(exception) == 'Expected a string value'
 
     def test_hmac_should_accept_unicode_key(self):
         algo = HMACAlgorithm(HMACAlgorithm.SHA256)
@@ -83,6 +96,28 @@ class TestAlgorithms:
         with pytest.raises(InvalidKeyError):
             with open(key_path('testkey2_rsa.pub.pem'), 'r') as keyfile:
                 algo.prepare_key(keyfile.read())
+
+    def test_hmac_jwk_should_parse_and_verify(self):
+        algo = HMACAlgorithm(HMACAlgorithm.SHA256)
+
+        with open(key_path('jwk_hmac.json'), 'r') as keyfile:
+            key = algo.from_jwk(keyfile.read())
+
+        signature = algo.sign(b'Hello World!', key)
+        assert algo.verify(b'Hello World!', key, signature)
+
+    def test_hmac_to_jwk_returns_correct_values(self):
+        algo = HMACAlgorithm(HMACAlgorithm.SHA256)
+        key = algo.to_jwk('secret')
+
+        assert json.loads(key) == {'kty': 'oct', 'k': 'c2VjcmV0'}
+
+    def test_hmac_from_jwk_should_raise_exception_if_not_hmac_key(self):
+        algo = HMACAlgorithm(HMACAlgorithm.SHA256)
+
+        with open(key_path('jwk_rsa_pub.json'), 'r') as keyfile:
+            with pytest.raises(InvalidKeyError):
+                algo.from_jwk(keyfile.read())
 
     @pytest.mark.skipif(not has_crypto, reason='Not supported without cryptography library')
     def test_rsa_should_parse_pem_public_key(self):
@@ -133,6 +168,162 @@ class TestAlgorithms:
 
         result = algo.verify(message, pub_key, sig)
         assert not result
+
+    @pytest.mark.skipif(not has_crypto, reason='Not supported without cryptography library')
+    def test_rsa_jwk_public_and_private_keys_should_parse_and_verify(self):
+        algo = RSAAlgorithm(RSAAlgorithm.SHA256)
+
+        with open(key_path('jwk_rsa_pub.json'), 'r') as keyfile:
+            pub_key = algo.from_jwk(keyfile.read())
+
+        with open(key_path('jwk_rsa_key.json'), 'r') as keyfile:
+            priv_key = algo.from_jwk(keyfile.read())
+
+        signature = algo.sign(ensure_bytes('Hello World!'), priv_key)
+        assert algo.verify(ensure_bytes('Hello World!'), pub_key, signature)
+
+    @pytest.mark.skipif(not has_crypto, reason='Not supported without cryptography library')
+    def test_rsa_jwk_private_key_with_other_primes_is_invalid(self):
+        algo = RSAAlgorithm(RSAAlgorithm.SHA256)
+
+        with open(key_path('jwk_rsa_key.json'), 'r') as keyfile:
+            with pytest.raises(InvalidKeyError):
+                keydata = json.loads(keyfile.read())
+                keydata['oth'] = []
+
+                algo.from_jwk(json.dumps(keydata))
+
+    @pytest.mark.skipif(not has_crypto, reason='Not supported without cryptography library')
+    def test_rsa_jwk_private_key_with_missing_values_is_invalid(self):
+        algo = RSAAlgorithm(RSAAlgorithm.SHA256)
+
+        with open(key_path('jwk_rsa_key.json'), 'r') as keyfile:
+            with pytest.raises(InvalidKeyError):
+                keydata = json.loads(keyfile.read())
+                del keydata['p']
+
+                algo.from_jwk(json.dumps(keydata))
+
+    @pytest.mark.skipif(not has_crypto, reason='Not supported without cryptography library')
+    def test_rsa_jwk_private_key_can_recover_prime_factors(self):
+        algo = RSAAlgorithm(RSAAlgorithm.SHA256)
+
+        with open(key_path('jwk_rsa_key.json'), 'r') as keyfile:
+            keybytes = keyfile.read()
+            control_key = algo.from_jwk(keybytes).private_numbers()
+
+            keydata = json.loads(keybytes)
+            delete_these = ['p', 'q', 'dp', 'dq', 'qi']
+            for field in delete_these:
+                del keydata[field]
+
+            parsed_key = algo.from_jwk(json.dumps(keydata)).private_numbers()
+
+        assert control_key.d == parsed_key.d
+        assert control_key.p == parsed_key.p
+        assert control_key.q == parsed_key.q
+        assert control_key.dmp1 == parsed_key.dmp1
+        assert control_key.dmq1 == parsed_key.dmq1
+        assert control_key.iqmp == parsed_key.iqmp
+
+    @pytest.mark.skipif(not has_crypto, reason='Not supported without cryptography library')
+    def test_rsa_jwk_private_key_with_missing_required_values_is_invalid(self):
+        algo = RSAAlgorithm(RSAAlgorithm.SHA256)
+
+        with open(key_path('jwk_rsa_key.json'), 'r') as keyfile:
+            with pytest.raises(InvalidKeyError):
+                keydata = json.loads(keyfile.read())
+                del keydata['p']
+
+                algo.from_jwk(json.dumps(keydata))
+
+    @pytest.mark.skipif(not has_crypto, reason='Not supported without cryptography library')
+    def test_rsa_jwk_raises_exception_if_not_a_valid_key(self):
+        algo = RSAAlgorithm(RSAAlgorithm.SHA256)
+
+        # Invalid JSON
+        with pytest.raises(InvalidKeyError):
+            algo.from_jwk('{not-a-real-key')
+
+        # Missing key parts
+        with pytest.raises(InvalidKeyError):
+            algo.from_jwk('{"kty": "RSA"}')
+
+    @pytest.mark.skipif(not has_crypto, reason='Not supported without cryptography library')
+    def test_rsa_to_jwk_returns_correct_values_for_public_key(self):
+        algo = RSAAlgorithm(RSAAlgorithm.SHA256)
+
+        with open(key_path('testkey_rsa.pub'), 'r') as keyfile:
+            pub_key = algo.prepare_key(keyfile.read())
+
+        key = algo.to_jwk(pub_key)
+
+        expected = {
+            'e': 'AQAB',
+            'key_ops': ['verify'],
+            'kty': 'RSA',
+            'n': (
+                '1HgzBfJv2cOjQryCwe8NEelriOTNFWKZUivevUrRhlqcmZJdCvuCJRr-xCN-'
+                'OmO8qwgJJR98feNujxVg-J9Ls3_UOA4HcF9nYH6aqVXELAE8Hk_ALvxi96ms'
+                '1DDuAvQGaYZ-lANxlvxeQFOZSbjkz_9mh8aLeGKwqJLp3p-OhUBQpwvAUAPg'
+                '82-OUtgTW3nSljjeFr14B8qAneGSc_wl0ni--1SRZUXFSovzcqQOkla3W27r'
+                'rLfrD6LXgj_TsDs4vD1PnIm1zcVenKT7TfYI17bsG_O_Wecwz2Nl19pL7gDo'
+                'sNruF3ogJWNq1Lyn_ijPQnkPLpZHyhvuiycYcI3DiQ'
+            ),
+            'use': 'sig'
+        }
+        assert json.loads(key) == expected
+
+    @pytest.mark.skipif(not has_crypto, reason='Not supported without cryptography library')
+    def test_rsa_to_jwk_returns_correct_values_for_private_key(self):
+        algo = RSAAlgorithm(RSAAlgorithm.SHA256)
+
+        with open(key_path('testkey_rsa'), 'r') as keyfile:
+            priv_key = algo.prepare_key(keyfile.read())
+
+        key = algo.to_jwk(priv_key)
+
+        expected = {
+            'key_ops': [u'sign'],
+            'kty': 'RSA',
+            'd': ('rfbs8AWdB1RkLJRlC51LukrAvYl5UfU1TE6XRa4o-DTg2-03OXLNEMyVpMr'
+                  'a47weEnu14StypzC8qXL7vxXOyd30SSFTffLfleaTg-qxgMZSDw-Fb_M-pU'
+                  'HMPMEDYG-lgGma4l4fd1yTX2ATtoUo9BVOQgWS1LMZqi0ASEOkUfzlBgL04'
+                  'UoaLhPSuDdLygdlDzgruVPnec0t1uOEObmrcWIkhwU2CGQzeLtuzX6OVgPh'
+                  'k7xcnjbDurTTVpWH0R0gbZ5ukmQ2P-YuCX8T9iWNMGjPNSkb7h02s2Oe9ZR'
+                  'zP007xQ0VF-Z7xyLuxk6ASmoX1S39ujSbk2WF0eXNPRgFwQ'),
+            'q': ('47hlW2f1ARuWYJf9Dl6MieXjdj2dGx9PL2UH0unVzJYInd56nqXNPrQrc5k'
+                  'ZU65KApC9n9oKUwIxuqwAAbh8oGNEQDqnuTj-powCkdC6bwA8KH1Y-wotpq'
+                  '_GSjxkNzjWRm2GArJSzZc6Fb8EuObOrAavKJ285-zMPCEfus1WZG0'),
+            'p': ('7tr0z929Lp4OHIRJjIKM_rDrWMPtRgnV-51pgWsN6qdpDzns_PgFwrHcoyY'
+                  'sWIO-4yCdVWPxFOgEZ8xXTM_uwOe4VEmdZhw55Tx7axYZtmZYZbO_RIP4CG'
+                  'mlJlOFTiYnxpr-2Cx6kIeQmd-hf7fA3tL018aEzwYMbFMcnAGnEg0'),
+            'qi': ('djo95mB0LVYikNPa-NgyDwLotLqrueb9IviMmn6zKHCwiOXReqXDX9slB8'
+                   'RA15uv56bmN04O__NyVFcgJ2ef169GZHiRFIgIy0Pl8LYkMhCYKKhyqM7g'
+                   'xN-SqGqDTKDC22j00S7jcvCaa1qadn1qbdfukZ4NXv7E2d_LO0Y2Kkc'),
+            'dp': ('tgZ2-tJpEdWxu1m1EzeKa644LHVjpTRptk7H0LDc8i6SieADEuWQvkb9df'
+                   'fpY6tDFaQNQr3fQ6dtdAztmsP7l1b_ynwvT1nDZUcqZvl4ruBgDWFmKbjI'
+                   'lOCt0v9jX6MEPP5xqBx9axdkw18BnGtUuHrbzHSlUX-yh_rumpVH1SE'),
+            'dq': ('xxCIuhD0YlWFbUcwFgGdBWcLIm_WCMGj7SB6aGu1VDTLr4Wu10TFWM0TNu'
+                   'hc9YPker2gpj5qzAmdAzwcfWSSvXpJTYR43jfulBTMoj8-2o3wCM0anclW'
+                   'AuKhin-kc4mh9ssDXRQZwlMymZP0QtaxUDw_nlfVrUCZgO7L1_ZsUTk')
+        }
+        assert json.loads(key) == expected
+
+    @pytest.mark.skipif(not has_crypto, reason='Not supported without cryptography library')
+    def test_rsa_to_jwk_raises_exception_on_invalid_key(self):
+        algo = RSAAlgorithm(RSAAlgorithm.SHA256)
+
+        with pytest.raises(InvalidKeyError):
+            algo.to_jwk({'not': 'a valid key'})
+
+    @pytest.mark.skipif(not has_crypto, reason='Not supported without cryptography library')
+    def test_rsa_from_jwk_raises_exception_on_invalid_key(self):
+        algo = RSAAlgorithm(RSAAlgorithm.SHA256)
+
+        with open(key_path('jwk_hmac.json'), 'r') as keyfile:
+            with pytest.raises(InvalidKeyError):
+                algo.from_jwk(keyfile.read())
 
     @pytest.mark.skipif(not has_crypto, reason='Not supported without cryptography library')
     def test_ec_should_reject_non_string_key(self):
