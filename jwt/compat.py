@@ -20,10 +20,6 @@ else:
 string_types = (text_type, binary_type)
 
 
-def is_string_type(val):
-    return any([isinstance(val, typ) for typ in string_types])
-
-
 def timedelta_total_seconds(delta):
     try:
         delta.total_seconds

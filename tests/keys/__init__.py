@@ -1,15 +1,15 @@
 import json
 import os
 
-from jwt.utils import base64url_decode
+from jwt.utils import base64url_decode, force_bytes
 
-from tests.utils import ensure_bytes, int_from_bytes
+from tests.utils import int_from_bytes
 
 BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 
 
 def decode_value(val):
-    decoded = base64url_decode(ensure_bytes(val))
+    decoded = base64url_decode(force_bytes(val))
     return int_from_bytes(decoded, 'big')
 
 
@@ -17,7 +17,7 @@ def load_hmac_key():
     with open(os.path.join(BASE_PATH, 'jwk_hmac.json'), 'r') as infile:
         keyobj = json.load(infile)
 
-    return base64url_decode(ensure_bytes(keyobj['k']))
+    return base64url_decode(force_bytes(keyobj['k']))
 
 try:
     from cryptography.hazmat.primitives.asymmetric import ec

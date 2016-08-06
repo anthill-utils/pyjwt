@@ -3,12 +3,12 @@ import json
 
 from jwt.algorithms import Algorithm, HMACAlgorithm, NoneAlgorithm
 from jwt.exceptions import InvalidKeyError
-from jwt.utils import base64url_decode
+from jwt.utils import base64url_decode, force_bytes, force_unicode
 
 import pytest
 
 from .keys import load_hmac_key
-from .utils import ensure_bytes, ensure_unicode, key_path
+from .utils import key_path
 
 try:
     from jwt.algorithms import RSAAlgorithm, ECAlgorithm, RSAPSSAlgorithm
@@ -67,7 +67,7 @@ class TestAlgorithms:
     def test_hmac_should_accept_unicode_key(self):
         algo = HMACAlgorithm(HMACAlgorithm.SHA256)
 
-        algo.prepare_key(ensure_unicode('awesome'))
+        algo.prepare_key(force_unicode('awesome'))
 
     def test_hmac_should_throw_exception_if_key_is_pem_public_key(self):
         algo = HMACAlgorithm(HMACAlgorithm.SHA256)
@@ -138,7 +138,7 @@ class TestAlgorithms:
         algo = RSAAlgorithm(RSAAlgorithm.SHA256)
 
         with open(key_path('testkey_rsa'), 'r') as rsa_key:
-            algo.prepare_key(ensure_unicode(rsa_key.read()))
+            algo.prepare_key(force_unicode(rsa_key.read()))
 
     @pytest.mark.skipif(not has_crypto, reason='Not supported without cryptography library')
     def test_rsa_should_reject_non_string_key(self):
@@ -151,9 +151,9 @@ class TestAlgorithms:
     def test_rsa_verify_should_return_false_if_signature_invalid(self):
         algo = RSAAlgorithm(RSAAlgorithm.SHA256)
 
-        message = ensure_bytes('Hello World!')
+        message = force_bytes('Hello World!')
 
-        sig = base64.b64decode(ensure_bytes(
+        sig = base64.b64decode(force_bytes(
             'yS6zk9DBkuGTtcBzLUzSpo9gGJxJFOGvUqN01iLhWHrzBQ9ZEz3+Ae38AXp'
             '10RWwscp42ySC85Z6zoN67yGkLNWnfmCZSEv+xqELGEvBJvciOKsrhiObUl'
             '2mveSc1oeO/2ujkGDkkkJ2epn0YliacVjZF5+/uDmImUfAAj8lzjnHlzYix'
@@ -161,7 +161,7 @@ class TestAlgorithms:
             'fHJnNUzAEUOXS0WahHVb57D30pcgIji9z923q90p5c7E2cU8V+E1qe8NdCA'
             'APCDzZZ9zQ/dgcMVaBrGrgimrcLbPjueOKFgSO+SSjIElKA=='))
 
-        sig += ensure_bytes('123')  # Signature is now invalid
+        sig += force_bytes('123')  # Signature is now invalid
 
         with open(key_path('testkey_rsa.pub'), 'r') as keyfile:
             pub_key = algo.prepare_key(keyfile.read())
@@ -179,8 +179,8 @@ class TestAlgorithms:
         with open(key_path('jwk_rsa_key.json'), 'r') as keyfile:
             priv_key = algo.from_jwk(keyfile.read())
 
-        signature = algo.sign(ensure_bytes('Hello World!'), priv_key)
-        assert algo.verify(ensure_bytes('Hello World!'), pub_key, signature)
+        signature = algo.sign(force_bytes('Hello World!'), priv_key)
+        assert algo.verify(force_bytes('Hello World!'), pub_key, signature)
 
     @pytest.mark.skipif(not has_crypto, reason='Not supported without cryptography library')
     def test_rsa_jwk_private_key_with_other_primes_is_invalid(self):
@@ -337,7 +337,7 @@ class TestAlgorithms:
         algo = ECAlgorithm(ECAlgorithm.SHA256)
 
         with open(key_path('testkey_ec'), 'r') as ec_key:
-            algo.prepare_key(ensure_unicode(ec_key.read()))
+            algo.prepare_key(force_unicode(ec_key.read()))
 
     @pytest.mark.skipif(not has_crypto, reason='Not supported without cryptography library')
     def test_ec_should_accept_pem_private_key_bytes(self):
@@ -350,10 +350,10 @@ class TestAlgorithms:
     def test_ec_verify_should_return_false_if_signature_invalid(self):
         algo = ECAlgorithm(ECAlgorithm.SHA256)
 
-        message = ensure_bytes('Hello World!')
+        message = force_bytes('Hello World!')
 
         # Mess up the signature by replacing a known byte
-        sig = base64.b64decode(ensure_bytes(
+        sig = base64.b64decode(force_bytes(
             'AC+m4Jf/xI3guAC6w0w37t5zRpSCF6F4udEz5LiMiTIjCS4vcVe6dDOxK+M'
             'mvkF8PxJuvqxP2CO3TR3okDPCl/NjATTO1jE+qBZ966CRQSSzcCM+tzcHzw'
             'LZS5kbvKu0Acd/K6Ol2/W3B1NeV5F/gjvZn/jOwaLgWEUYsg0o4XVrAg65'.replace('r', 's')))
@@ -368,9 +368,9 @@ class TestAlgorithms:
     def test_ec_verify_should_return_false_if_signature_wrong_length(self):
         algo = ECAlgorithm(ECAlgorithm.SHA256)
 
-        message = ensure_bytes('Hello World!')
+        message = force_bytes('Hello World!')
 
-        sig = base64.b64decode(ensure_bytes('AC+m4Jf/xI3guAC6w0w3'))
+        sig = base64.b64decode(force_bytes('AC+m4Jf/xI3guAC6w0w3'))
 
         with open(key_path('testkey_ec.pub'), 'r') as keyfile:
             pub_key = algo.prepare_key(keyfile.read())
@@ -382,7 +382,7 @@ class TestAlgorithms:
     def test_rsa_pss_sign_then_verify_should_return_true(self):
         algo = RSAPSSAlgorithm(RSAPSSAlgorithm.SHA256)
 
-        message = ensure_bytes('Hello World!')
+        message = force_bytes('Hello World!')
 
         with open(key_path('testkey_rsa'), 'r') as keyfile:
             priv_key = algo.prepare_key(keyfile.read())
@@ -398,9 +398,9 @@ class TestAlgorithms:
     def test_rsa_pss_verify_should_return_false_if_signature_invalid(self):
         algo = RSAPSSAlgorithm(RSAPSSAlgorithm.SHA256)
 
-        jwt_message = ensure_bytes('Hello World!')
+        jwt_message = force_bytes('Hello World!')
 
-        jwt_sig = base64.b64decode(ensure_bytes(
+        jwt_sig = base64.b64decode(force_bytes(
             'ywKAUGRIDC//6X+tjvZA96yEtMqpOrSppCNfYI7NKyon3P7doud5v65oWNu'
             'vQsz0fzPGfF7mQFGo9Cm9Vn0nljm4G6PtqZRbz5fXNQBH9k10gq34AtM02c'
             '/cveqACQ8gF3zxWh6qr9jVqIpeMEaEBIkvqG954E0HT9s9ybHShgHX9mlWk'
@@ -408,7 +408,7 @@ class TestAlgorithms:
             'daOCWqbpZDuLb1imKpmm8Nsm56kAxijMLZnpCcnPgyb7CqG+B93W9GHglA5'
             'drUeR1gRtO7vqbZMsCAQ4bpjXxwbYyjQlEVuMl73UL6sOWg=='))
 
-        jwt_sig += ensure_bytes('123')  # Signature is now invalid
+        jwt_sig += force_bytes('123')  # Signature is now invalid
 
         with open(key_path('testkey_rsa.pub'), 'r') as keyfile:
             jwt_pub_key = algo.prepare_key(keyfile.read())
@@ -430,7 +430,7 @@ class TestAlgorithmsRFC7520:
 
         Reference: https://tools.ietf.org/html/rfc7520#section-4.4
         """
-        signing_input = ensure_bytes(
+        signing_input = force_bytes(
             'eyJhbGciOiJIUzI1NiIsImtpZCI6IjAxOGMwYWU1LTRkOWItNDcxYi1iZmQ2LWVlZ'
             'jMxNGJjNzAzNyJ9.SXTigJlzIGEgZGFuZ2Vyb3VzIGJ1c2luZXNzLCBGcm9kbywgZ'
             '29pbmcgb3V0IHlvdXIgZG9vci4gWW91IHN0ZXAgb250byB0aGUgcm9hZCwgYW5kIG'
@@ -438,7 +438,7 @@ class TestAlgorithmsRFC7520:
             'gd2hlcmUgeW91IG1pZ2h0IGJlIHN3ZXB0IG9mZiB0by4'
         )
 
-        signature = base64url_decode(ensure_bytes(
+        signature = base64url_decode(force_bytes(
             's0h6KThzkfBBBkLspW1h84VsJZFTsPPqMDA7g1Md7p0'
         ))
 
@@ -456,7 +456,7 @@ class TestAlgorithmsRFC7520:
 
         Reference: https://tools.ietf.org/html/rfc7520#section-4.1
         """
-        signing_input = ensure_bytes(
+        signing_input = force_bytes(
             'eyJhbGciOiJSUzI1NiIsImtpZCI6ImJpbGJvLmJhZ2dpbnNAaG9iYml0b24uZXhhb'
             'XBsZSJ9.SXTigJlzIGEgZGFuZ2Vyb3VzIGJ1c2luZXNzLCBGcm9kbywgZ29pbmcgb'
             '3V0IHlvdXIgZG9vci4gWW91IHN0ZXAgb250byB0aGUgcm9hZCwgYW5kIGlmIHlvdS'
@@ -464,7 +464,7 @@ class TestAlgorithmsRFC7520:
             'geW91IG1pZ2h0IGJlIHN3ZXB0IG9mZiB0by4'
         )
 
-        signature = base64url_decode(ensure_bytes(
+        signature = base64url_decode(force_bytes(
             'MRjdkly7_-oTPTS3AXP41iQIGKa80A0ZmTuV5MEaHoxnW2e5CZ5NlKtainoFmKZop'
             'dHM1O2U4mwzJdQx996ivp83xuglII7PNDi84wnB-BDkoBwA78185hX-Es4JIwmDLJ'
             'K3lfWRa-XtL0RnltuYv746iYTh_qHRD68BNt1uSNCrUCTJDt5aAE6x8wW1Kt9eRo4'
@@ -487,7 +487,7 @@ class TestAlgorithmsRFC7520:
 
         Reference: https://tools.ietf.org/html/rfc7520#section-4.2
         """
-        signing_input = ensure_bytes(
+        signing_input = force_bytes(
             'eyJhbGciOiJQUzM4NCIsImtpZCI6ImJpbGJvLmJhZ2dpbnNAaG9iYml0b24uZXhhb'
             'XBsZSJ9.SXTigJlzIGEgZGFuZ2Vyb3VzIGJ1c2luZXNzLCBGcm9kbywgZ29pbmcgb'
             '3V0IHlvdXIgZG9vci4gWW91IHN0ZXAgb250byB0aGUgcm9hZCwgYW5kIGlmIHlvdS'
@@ -495,7 +495,7 @@ class TestAlgorithmsRFC7520:
             'geW91IG1pZ2h0IGJlIHN3ZXB0IG9mZiB0by4'
         )
 
-        signature = base64url_decode(ensure_bytes(
+        signature = base64url_decode(force_bytes(
             'cu22eBqkYDKgIlTpzDXGvaFfz6WGoz7fUDcfT0kkOy42miAh2qyBzk1xEsnk2IpN6'
             '-tPid6VrklHkqsGqDqHCdP6O8TTB5dDDItllVo6_1OLPpcbUrhiUSMxbbXUvdvWXz'
             'g-UD8biiReQFlfz28zGWVsdiNAUf8ZnyPEgVFn442ZdNqiVJRmBqrYRXe8P_ijQ7p'
@@ -518,7 +518,7 @@ class TestAlgorithmsRFC7520:
 
         Reference: https://tools.ietf.org/html/rfc7520#section-4.3
         """
-        signing_input = ensure_bytes(
+        signing_input = force_bytes(
             'eyJhbGciOiJFUzUxMiIsImtpZCI6ImJpbGJvLmJhZ2dpbnNAaG9iYml0b24uZXhhb'
             'XBsZSJ9.SXTigJlzIGEgZGFuZ2Vyb3VzIGJ1c2luZXNzLCBGcm9kbywgZ29pbmcgb'
             '3V0IHlvdXIgZG9vci4gWW91IHN0ZXAgb250byB0aGUgcm9hZCwgYW5kIGlmIHlvdS'
@@ -526,7 +526,7 @@ class TestAlgorithmsRFC7520:
             'geW91IG1pZ2h0IGJlIHN3ZXB0IG9mZiB0by4'
         )
 
-        signature = base64url_decode(ensure_bytes(
+        signature = base64url_decode(force_bytes(
             'AE_R_YZCChjn4791jSQCrdPZCNYqHXCTZH0-JZGYNlaAjP2kqaluUIIUnC9qvbu9P'
             'lon7KRTzoNEuT4Va2cmL1eJAQy3mtPBu_u_sDDyYjnAMDxXPn7XrT0lw-kvAD890j'
             'l8e2puQens_IEKBpHABlsbEPX6sFY8OcGDqoRuBomu9xQ2'
