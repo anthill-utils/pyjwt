@@ -1,15 +1,30 @@
 Usage Examples
 ==============
 
-Encoding & Decoding Tokens
+Encoding & Decoding Tokens with HS256
 ---------------------------------
 
 .. code-block:: python
 
     >>import jwt
-    >>encoded = jwt.encode({'some': 'payload'}, 'secret', algorithm='HS256')
+    >>key = 'secret'
+    >>encoded = jwt.encode({'some': 'payload'}, key, algorithm='HS256')
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzb21lIjoicGF5bG9hZCJ9.4twFt5NiznN84AWoo1d7KO1T_yoc0Z6XOpOVswacPZg'
+    >>decoded = jwt.decode(encoded, key, algorithms='HS256')
+    {'some': 'payload'}
 
+Encoding & Decoding Tokens with RS256 (RSA)
+---------------------------------
+
+.. code-block:: python
+
+    >>import jwt
+    >>private_key = b'-----BEGIN PRIVATE KEY-----\nMIGEAgEAMBAGByqGSM49AgEGBS...'
+    >>public_key = b'-----BEGIN PUBLIC KEY-----\nMHYwEAYHKoZIzj0CAQYFK4EEAC...'
+    >>encoded = jwt.encode({'some': 'payload'}, private_key, algorithm='RS256')
+    'eyJhbGciOiJIU...'
+    >>decoded = jwt.decode(encoded, public_key, algorithms='RS256')
+    {'some': 'payload'}
 
 Specifying Additional Headers
 ---------------------------------
@@ -73,7 +88,7 @@ Expiration time is automatically verified in `jwt.decode()` and raises
 .. code-block:: python
 
     try:
-        jwt.decode('JWT_STRING', 'secret')
+        jwt.decode('JWT_STRING', 'secret', algorithms=['HS256'])
     except jwt.ExpiredSignatureError:
         # Signature has expired
 
@@ -99,14 +114,14 @@ you can set a leeway of 10 seconds in order to have some margin:
 
     # JWT payload is now expired
     # But with some leeway, it will still validate
-    jwt.decode(jwt_payload, 'secret', leeway=10)
+    jwt.decode(jwt_payload, 'secret', leeway=10, algorithms=['HS256'])
 
 Instead of specifying the leeway as a number of seconds, a `datetime.timedelta`
 instance can be used. The last line in the example above is equivalent to:
 
 .. code-block:: python
 
-    jwt.decode(jwt_payload, 'secret', leeway=datetime.timedelta(seconds=10))
+    jwt.decode(jwt_payload, 'secret', leeway=datetime.timedelta(seconds=10), algorithms=['HS256'])
 
 Not Before Time Claim (nbf)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -142,7 +157,7 @@ Issuer Claim (iss)
     }
 
     token = jwt.encode(payload, 'secret')
-    decoded = jwt.decode(token, 'secret', issuer='urn:foo')
+    decoded = jwt.decode(token, 'secret', issuer='urn:foo', algorithms=['HS256'])
 
 If the issuer claim is incorrect, `jwt.InvalidIssuerError` will be raised.
 
@@ -169,7 +184,7 @@ Audience Claim (aud)
     }
 
     token = jwt.encode(payload, 'secret')
-    decoded = jwt.decode(token, 'secret', audience='urn:foo')
+    decoded = jwt.decode(token, 'secret', audience='urn:foo', algorithms=['HS256'])
 
 If the audience claim is incorrect, `jwt.InvalidAudienceError` will be raised.
 
@@ -180,8 +195,7 @@ Issued At Claim (iat)
     This claim can be used to determine the age of the JWT. Its value MUST be a
     number containing a NumericDate value. Use of this claim is OPTIONAL.
 
-If the `iat` claim is in the future, an `jwt.InvalidIssuedAtError` exception
-will be raised.
+    If the `iat` claim is not a number, an `jwt.InvalidIssuedAtError` exception will be raised.
 
 .. code-block:: python
 

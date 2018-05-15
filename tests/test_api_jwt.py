@@ -1,7 +1,6 @@
 
 import json
 import time
-
 from calendar import timegm
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -92,7 +91,7 @@ class TestJWT:
             jwt.decode(example_jwt, secret, audience=1)
 
         exception = context.value
-        assert str(exception) == 'audience must be a string or None'
+        assert str(exception) == 'audience must be a string, iterable, or None'
 
     def test_decode_with_nonlist_aud_claim_throws_exception(self, jwt):
         secret = 'secret'
@@ -142,7 +141,7 @@ class TestJWT:
                        'eyJpYXQiOiJub3QtYW4taW50In0.'
                        'H1GmcQgSySa5LOKYbzGm--b1OmRbHFkyk8pq811FzZM')
 
-        with pytest.raises(DecodeError):
+        with pytest.raises(InvalidIssuedAtError):
             jwt.decode(example_jwt, 'secret')
 
     def test_decode_raises_exception_if_nbf_is_not_int(self, jwt):
@@ -153,13 +152,6 @@ class TestJWT:
 
         with pytest.raises(DecodeError):
             jwt.decode(example_jwt, 'secret')
-
-    def test_decode_raises_exception_if_iat_in_the_future(self, jwt):
-        now = datetime.utcnow()
-        token = jwt.encode({'iat': now + timedelta(days=1)}, key='secret')
-
-        with pytest.raises(InvalidIssuedAtError):
-            jwt.decode(token, 'secret')
 
     def test_encode_datetime(self, jwt):
         secret = 'secret'
@@ -287,6 +279,32 @@ class TestJWT:
         }
         token = jwt.encode(payload, 'secret')
         jwt.decode(token, 'secret', audience='urn:me')
+
+    def test_check_audience_list_when_valid(self, jwt):
+        payload = {
+            'some': 'payload',
+            'aud': 'urn:me'
+        }
+        token = jwt.encode(payload, 'secret')
+        jwt.decode(token, 'secret', audience=['urn:you', 'urn:me'])
+
+    def test_check_audience_none_specified(self, jwt):
+        payload = {
+            'some': 'payload',
+            'aud': 'urn:me'
+        }
+        token = jwt.encode(payload, 'secret')
+        with pytest.raises(InvalidAudienceError):
+            jwt.decode(token, 'secret')
+
+    def test_raise_exception_invalid_audience_list(self, jwt):
+        payload = {
+            'some': 'payload',
+            'aud': 'urn:me'
+        }
+        token = jwt.encode(payload, 'secret')
+        with pytest.raises(InvalidAudienceError):
+            jwt.decode(token, 'secret', audience=['urn:you', 'urn:him'])
 
     def test_check_audience_in_array_when_valid(self, jwt):
         payload = {
@@ -479,3 +497,26 @@ class TestJWT:
                 secret,
                 verify_expiration=True
             )
+
+    def test_decode_with_optional_algorithms(self, jwt, payload):
+        secret = 'secret'
+        jwt_message = jwt.encode(payload, secret)
+
+        pytest.deprecated_call(
+            jwt.decode,
+            jwt_message,
+            secret
+        )
+
+    def test_decode_no_algorithms_verify_false(self, jwt, payload):
+        secret = 'secret'
+        jwt_message = jwt.encode(payload, secret)
+
+        try:
+            pytest.deprecated_call(
+                jwt.decode, jwt_message, secret, verify=False,
+            )
+        except AssertionError:
+            pass
+        else:
+            assert False, "Unexpected DeprecationWarning raised."
