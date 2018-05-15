@@ -43,8 +43,8 @@ class PyJWT(PyJWS):
                key,  # type: str
                algorithm='HS256',  # type: str
                headers=None,  # type: Optional[Dict]
-               json_encoder=None  # type: Optional[Callable]
-               ):
+               json_encoder=None,  # type: Optional[Callable]
+               **kwargs):
         # Check that we get a mapping
         if not isinstance(payload, Mapping):
             raise TypeError('Expecting a mapping object, as JWT only supports '
@@ -63,7 +63,7 @@ class PyJWT(PyJWS):
         ).encode('utf-8')
 
         return super(PyJWT, self).encode(
-            json_payload, key, algorithm, headers, json_encoder
+            json_payload, key, algorithm, headers, json_encoder, **kwargs
         )
 
     def decode(self,
